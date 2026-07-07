@@ -93,6 +93,8 @@
   .login-box .btn{width:100%;margin-top:6px}
   .login-msg{font-size:12px;margin:6px 0;color:var(--red);min-height:16px}
   .login-msg.ok{color:#3d7a1f}
+  .link-btn{background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;margin-top:10px;width:100%;text-decoration:underline}
+  .link-btn:hover{color:var(--accent-dark)}
   #userBox{margin-left:8px;display:none;align-items:center;gap:10px;font-size:12px}
   #userBox button{background:rgba(255,255,255,.15);border:none;color:#fff;padding:6px 12px;border-radius:6px;cursor:pointer}
   .sync-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#7be07b;margin-right:5px}
@@ -120,12 +122,20 @@
   <div class="login-box">
     <h2>🔬 UA-Verwaltung</h2>
     <p class="muted" style="margin-top:0">Zentrale Datenbank – Anmeldung erforderlich</p>
-    <label>E-Mail</label><input id="l-email" type="email" autocomplete="username" placeholder="name@firma.de">
-    <label>Passwort</label><input id="l-pass" type="password" autocomplete="current-password">
-    <div class="login-msg" id="l-msg"></div>
-    <button class="btn" onclick="doLogin()">Anmelden</button>
-    <button class="btn secondary" onclick="doRegister()">Neu registrieren</button>
-    <p class="muted" style="margin-bottom:0;margin-top:12px">Nach der Registrierung bekommst du eine Bestätigungs-E-Mail. Die Daten sehen nur freigeschaltete E-Mail-Adressen.</p>
+    <div id="loginForm">
+      <label>E-Mail</label><input id="l-email" type="email" autocomplete="username" placeholder="name@firma.de">
+      <label>Passwort</label><input id="l-pass" type="password" autocomplete="current-password">
+      <div class="login-msg" id="l-msg"></div>
+      <button class="btn" onclick="doLogin()">Anmelden</button>
+      <button class="btn secondary" onclick="doRegister()">Neu registrieren</button>
+      <button class="link-btn" onclick="doReset()">Passwort vergessen?</button>
+      <p class="muted" style="margin-bottom:0;margin-top:12px">Erster Besuch? Mit „Neu registrieren“ legst du dein eigenes Passwort fest und bekommst eine Bestätigungs-E-Mail. Die Daten sehen nur freigeschaltete E-Mail-Adressen.</p>
+    </div>
+    <div id="pwResetBox" class="hidden">
+      <label>Neues Passwort (mind. 6 Zeichen)</label><input id="r-pass" type="password" autocomplete="new-password">
+      <div class="login-msg" id="r-msg"></div>
+      <button class="btn" onclick="doSetNewPassword()">Neues Passwort speichern</button>
+    </div>
   </div>
 </div>
 
@@ -928,7 +938,32 @@ async function doLogout(){
   db = emptyDB(); refreshAll();
   $('userBox').style.display = 'none';
   loginMsg('');
+  $('pwResetBox').classList.add('hidden');
+  $('loginForm').classList.remove('hidden');
   $('loginOverlay').classList.remove('hidden');
+}
+
+/* ---- Passwort vergessen / zurücksetzen ---- */
+async function doReset(){
+  const email = $('l-email').value.trim();
+  if(!email){ loginMsg('⚠ Bitte oben deine E-Mail eintragen und dann erneut auf „Passwort vergessen?“ klicken'); return; }
+  loginMsg('Sende E-Mail…', true);
+  const {error} = await sb.auth.resetPasswordForEmail(email, {redirectTo: location.origin + location.pathname});
+  if(error){ loginMsg('⚠ ' + error.message); return; }
+  loginMsg('✔ E-Mail zum Zurücksetzen ist unterwegs – bitte den Link darin anklicken.', true);
+}
+function resetMsg(text, ok){ const m = $('r-msg'); m.textContent = text||''; m.classList.toggle('ok', !!ok); }
+async function doSetNewPassword(){
+  const p = $('r-pass').value;
+  if(p.length < 6){ resetMsg('⚠ Mindestens 6 Zeichen'); return; }
+  resetMsg('Speichere…', true);
+  const {error} = await sb.auth.updateUser({password: p});
+  if(error){ resetMsg('⚠ ' + error.message); return; }
+  $('r-pass').value = '';
+  $('pwResetBox').classList.add('hidden');
+  $('loginForm').classList.remove('hidden');
+  loginMsg('✔ Passwort geändert – du wirst angemeldet…', true);
+  await enterApp();
 }
 
 let realtimeAktiv = false;
@@ -979,6 +1014,16 @@ async function migrateLegacy(){
 }
 
 $('l-pass').addEventListener('keydown', e=>{ if(e.key === 'Enter') doLogin(); });
+
+// Kommt der Nutzer über den Link aus der Passwort-vergessen-E-Mail,
+// zeigt die App das Formular für das neue Passwort
+sb.auth.onAuthStateChange((event)=>{
+  if(event === 'PASSWORD_RECOVERY'){
+    $('loginOverlay').classList.remove('hidden');
+    $('loginForm').classList.add('hidden');
+    $('pwResetBox').classList.remove('hidden');
+  }
+});
 
 resetForm();
 refreshAll();
