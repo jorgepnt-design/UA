@@ -233,6 +233,15 @@
     <input type="file" id="impXlsx" accept=".xlsx,.xls,.csv" class="hidden">
     <p class="muted" style="margin-top:10px">Excel-Import: Die erste Zeile muss Spaltenüberschriften enthalten (z. B. „UA-Nr“, „Auftraggeber“, „Verantwortlicher“, „Kunde“, „Untersuchung 1“, „Untersuchung 2“, „Material“, „Dichte“, „Eingangsdatum“, „Zieldatum“, „Status“, „Kommentar“). Die Zuordnung erfolgt automatisch, Dubletten (gleiche UA-Nr.) werden übersprungen, Dropdown-Listen werden mit den vorhandenen Werten vorbelegt. Für .xlsx wird beim ersten Import einmalig eine Bibliothek aus dem Internet geladen – CSV funktioniert komplett offline.</p>
   </div>
+  <div class="card hidden" id="accessCard">
+    <h2>🔑 Zugriff freigeben</h2>
+    <p class="muted">Nur E-Mail-Adressen auf dieser Liste können die UA-Daten sehen. Ablauf: Kollege registriert sich selbst in der App → du trägst seine Adresse hier ein → er hat Zugriff. Mit ✕ entziehst du den Zugriff jederzeit wieder.</p>
+    <div style="display:flex;gap:8px;max-width:480px">
+      <input id="acc-email" type="email" placeholder="kollege@firma.de">
+      <button class="btn" onclick="addAccess()">Freigeben</button>
+    </div>
+    <div id="accessList" style="margin-top:10px"></div>
+  </div>
   <div class="card">
     <h2>Gelernte Dropdown-Listen verwalten</h2>
     <p class="muted">Neue Werte werden beim Speichern einer UA automatisch gelernt (ohne Dubletten). Hier kannst du einzelne Werte entfernen.</p>
@@ -936,11 +945,48 @@ async function doRegister(){
 async function doLogout(){
   await sb.auth.signOut();
   db = emptyDB(); refreshAll();
+  meineEmail = ''; binAdmin = false; freigaben = [];
+  $('accessCard').classList.add('hidden');
   $('userBox').style.display = 'none';
   loginMsg('');
   $('pwResetBox').classList.add('hidden');
   $('loginForm').classList.remove('hidden');
   $('loginOverlay').classList.remove('hidden');
+}
+
+/* ---- Zugriffsverwaltung (nur Admin) ---- */
+let meineEmail = '', binAdmin = false, freigaben = [];
+
+async function loadAccess(){
+  const {data, error} = await sb.from('ua_erlaubte_nutzer').select('email, ist_admin').order('email');
+  if(error || !data) return;
+  freigaben = data;
+  binAdmin = data.some(x => x.email.toLowerCase() === meineEmail.toLowerCase() && x.ist_admin);
+  $('accessCard').classList.toggle('hidden', !binAdmin);
+  renderAccess();
+}
+function renderAccess(){
+  if(!binAdmin) return;
+  $('accessList').innerHTML = freigaben.map(f => `<span class="chip">${esc(f.email)}${f.ist_admin ? ' <span title="Admin">👑</span>' : ''} ${
+    f.email.toLowerCase() === meineEmail.toLowerCase() ? '' :
+    `<button title="Zugriff entziehen" onclick="removeAccess('${esc(f.email).replace(/'/g,"\\'")}')">✕</button>`
+  }</span>`).join('');
+}
+async function addAccess(){
+  const email = $('acc-email').value.trim().toLowerCase();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ toast('⚠ Bitte eine gültige E-Mail-Adresse eingeben'); return; }
+  const ok = await remoteWrite(sb.from('ua_erlaubte_nutzer').upsert({email}, {onConflict:'email', ignoreDuplicates:true}));
+  if(!ok) return;
+  $('acc-email').value = '';
+  await loadAccess();
+  toast(`✔ ${email} freigeschaltet`);
+}
+async function removeAccess(email){
+  if(!confirm(`${email} den Zugriff auf die UA-Daten entziehen?`)) return;
+  const ok = await remoteWrite(sb.from('ua_erlaubte_nutzer').delete().eq('email', email));
+  if(!ok) return;
+  await loadAccess();
+  toast(`🗑 Zugriff für ${email} entzogen`);
 }
 
 /* ---- Passwort vergessen / zurücksetzen ---- */
@@ -978,9 +1024,11 @@ async function enterApp(){
     return;
   }
   $('loginOverlay').classList.add('hidden');
+  meineEmail = user.email;
   $('userEmail').textContent = user.email;
   $('userBox').style.display = 'flex';
   await loadRemote();
+  await loadAccess();
   await migrateLegacy();
   resetForm(); refreshAll();
   if(!realtimeAktiv){
