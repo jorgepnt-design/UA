@@ -51,9 +51,11 @@
     background-repeat:no-repeat;background-position:right 8px center;background-size:10px}
   .status-select.st1{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235c4a00' fill='none' stroke-width='2'/%3E%3C/svg%3E")}
   .status-select option{background:#fff;color:var(--text);font-weight:400}
-  tr.due-red td:first-child{box-shadow:inset 4px 0 0 var(--red)}
-  tr.due-yellow td:first-child{box-shadow:inset 4px 0 0 var(--yellow)}
-  tr.done td:first-child{box-shadow:inset 4px 0 0 var(--green)}
+  tr.stbar0 td:first-child{box-shadow:inset 4px 0 0 var(--st0)}
+  tr.stbar1 td:first-child{box-shadow:inset 4px 0 0 var(--st1)}
+  tr.stbar2 td:first-child{box-shadow:inset 4px 0 0 var(--st2)}
+  tr.stbar3 td:first-child{box-shadow:inset 4px 0 0 var(--st3)}
+  tr.stbar4 td:first-child{box-shadow:inset 4px 0 0 var(--st4)}
   .days{font-weight:700;white-space:nowrap}
   .days.red{color:var(--red)}.days.yellow{color:#b8860b}.days.green{color:var(--green)}
   .ua-nr{font-weight:700;color:var(--accent-dark);cursor:pointer;white-space:nowrap}
@@ -296,15 +298,7 @@ function daysUntil(zieldatum){
   const z = new Date(zieldatum + 'T00:00:00');
   return Math.round((z - t) / 86400000);
 }
-// abgeschlossen -> grün; sonst: <=5 Tage -> rot, 6–10 Tage -> gelb
-function dueClass(ua){
-  if(ua.status === 4) return 'done';
-  const d = daysUntil(ua.zieldatum);
-  if(d === null) return '';
-  if(d <= 5) return 'due-red';
-  if(d <= 10) return 'due-yellow';
-  return '';
-}
+// Frist-Ampel (Spalte "Tage bis Frist"): abgeschlossen -> grün; sonst <=5 Tage -> rot, 6–10 Tage -> gelb
 
 /* ---- Lernende Listen (Dubletten-frei, Groß/Klein wird ignoriert) ---- */
 function learnValue(listName, value){
@@ -479,7 +473,7 @@ function renderTable(){
     const dCls = u.status===4 ? 'green' : (d===null ? '' : d<=5 ? 'red' : d<=10 ? 'yellow' : '');
     const lastC = (u.kommentare && u.kommentare.length) ? u.kommentare[u.kommentare.length-1].text : '';
     const tr = document.createElement('tr');
-    tr.className = dueClass(u);
+    tr.className = 'stbar' + (STATUS[u.status] ? u.status : 0);
     tr.innerHTML = `
       <td class="ua-nr">${esc(u.nr)}</td>
       <td>${esc(u.auftraggeber)}</td><td>${esc(u.verantwortlicher)}</td><td>${esc(u.kunde)}</td>
