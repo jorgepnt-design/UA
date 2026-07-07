@@ -86,6 +86,17 @@
   .toast.show{opacity:1}
   .hidden{display:none!important}
   .flex-end{display:flex;gap:10px;justify-content:flex-end;margin-top:14px}
+  .login-overlay{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:50}
+  .login-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:28px;width:340px;max-width:92%;box-shadow:0 8px 30px rgba(92,17,80,.15)}
+  .login-box h2{margin:0 0 4px;color:var(--accent)}
+  .login-box input{margin-bottom:10px}
+  .login-box .btn{width:100%;margin-top:6px}
+  .login-msg{font-size:12px;margin:6px 0;color:var(--red);min-height:16px}
+  .login-msg.ok{color:#3d7a1f}
+  #userBox{margin-left:8px;display:none;align-items:center;gap:10px;font-size:12px}
+  #userBox button{background:rgba(255,255,255,.15);border:none;color:#fff;padding:6px 12px;border-radius:6px;cursor:pointer}
+  .sync-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#7be07b;margin-right:5px}
+  .sync-dot.off{background:#f2c14e}
 </style>
 </head>
 <body>
@@ -101,7 +112,22 @@
     <button data-tab="dash">📊 Dashboard</button>
     <button data-tab="data">💾 Daten</button>
   </nav>
+  <div id="userBox"><span title="Verbindung zur Datenbank"><span class="sync-dot" id="syncDot"></span><span id="userEmail"></span></span><button onclick="doLogout()">Abmelden</button></div>
 </header>
+
+<!-- ===================== LOGIN ===================== -->
+<div id="loginOverlay" class="login-overlay">
+  <div class="login-box">
+    <h2>🔬 UA-Verwaltung</h2>
+    <p class="muted" style="margin-top:0">Zentrale Datenbank – Anmeldung erforderlich</p>
+    <label>E-Mail</label><input id="l-email" type="email" autocomplete="username" placeholder="name@firma.de">
+    <label>Passwort</label><input id="l-pass" type="password" autocomplete="current-password">
+    <div class="login-msg" id="l-msg"></div>
+    <button class="btn" onclick="doLogin()">Anmelden</button>
+    <button class="btn secondary" onclick="doRegister()">Neu registrieren</button>
+    <p class="muted" style="margin-bottom:0;margin-top:12px">Nach der Registrierung bekommst du eine Bestätigungs-E-Mail. Die Daten sehen nur freigeschaltete E-Mail-Adressen.</p>
+  </div>
+</div>
 
 <main>
 
@@ -245,6 +271,7 @@
   </div>
 </dialog>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 /* =====================================================================
    CORE LOGIC (eigenständig nutzbar – z. B. für eine API außerhalb der App)
@@ -263,22 +290,64 @@ const LIST_FIELDS = {
   kunde:'Kunde', untersuchung:'Untersuchung (1+2)', material:'Material'
 };
 
-const STORE_KEY = 'ua-app-data-v1';
+/* ---- Supabase (zentrale Datenbank) ---- */
+const SUPABASE_URL = 'https://ylbfimgvfnhlwtjxwvov.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_MBPdek1YNta-vJ6gYftzlw_nfzTuoL8';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const CACHE_KEY  = 'ua-app-cache-v2';  // lokale Kopie für schnellen Start / Offline-Ansicht
+const LEGACY_KEY = 'ua-app-data-v1';   // alter localStorage-Datenbestand (vor Supabase)
 
 function emptyDB(){
-  return { version:1, uas:[], lists:{auftraggeber:[],verantwortlicher:[],kunde:[],untersuchung:[],material:[]} };
+  return { version:2, uas:[], lists:{auftraggeber:[],verantwortlicher:[],kunde:[],untersuchung:[],material:[]} };
 }
 
-let db = load();
+let db = emptyDB();
 
-function load(){
-  try{
-    const raw = localStorage.getItem(STORE_KEY);
-    if(raw){ const d = JSON.parse(raw); if(d && Array.isArray(d.uas)) { d.lists = Object.assign(emptyDB().lists, d.lists||{}); return d; } }
-  }catch(e){ console.error('Ladefehler', e); }
-  return emptyDB();
+function cacheLocal(){ localStorage.setItem(CACHE_KEY, JSON.stringify(db)); }
+
+function rowToUA(r){
+  return { id:r.id, nr:r.nr,
+    auftraggeber:r.auftraggeber||'', verantwortlicher:r.verantwortlicher||'', kunde:r.kunde||'',
+    untersuchung1:r.untersuchung1||'', untersuchung2:r.untersuchung2||'', material:r.material||'', dichte:r.dichte||'',
+    eingangsdatum:r.eingangsdatum||'', zieldatum:r.zieldatum||'',
+    status:r.status??0, kommentare:r.kommentare||[],
+    createdAt:r.created_at, updatedAt:r.updated_at };
 }
-function persist(){ localStorage.setItem(STORE_KEY, JSON.stringify(db)); }
+function uaToRow(u){
+  return { id:u.id, nr:u.nr,
+    auftraggeber:u.auftraggeber||'', verantwortlicher:u.verantwortlicher||'', kunde:u.kunde||'',
+    untersuchung1:u.untersuchung1||'', untersuchung2:u.untersuchung2||'', material:u.material||'', dichte:u.dichte||'',
+    eingangsdatum:u.eingangsdatum||null, zieldatum:u.zieldatum||null,
+    status:u.status??0, kommentare:u.kommentare||[],
+    updated_at:u.updatedAt||new Date().toISOString() };
+}
+
+async function loadRemote(){
+  const [a,l] = await Promise.all([
+    sb.from('ua_auftraege').select('*').order('nr'),
+    sb.from('ua_listen').select('*')
+  ]);
+  if(a.error || l.error){
+    setSync(false);
+    try{ const c = localStorage.getItem(CACHE_KEY); if(c) db = JSON.parse(c); }catch(e){}
+    toast('⚠ Keine Verbindung zur Datenbank – zeige lokale Kopie');
+    return false;
+  }
+  db = emptyDB();
+  db.uas = a.data.map(rowToUA);
+  for(const r of l.data){ if(db.lists[r.name] && !db.lists[r.name].includes(r.wert)) db.lists[r.name].push(r.wert); }
+  for(const k of Object.keys(db.lists)) db.lists[k].sort((x,y)=>x.localeCompare(y,'de'));
+  setSync(true); cacheLocal();
+  return true;
+}
+
+// Führt eine Schreiboperation aus; bei Fehler Toast + Sync-Punkt gelb
+async function remoteWrite(q){
+  const {error} = await q;
+  if(error){ console.error(error); setSync(false); toast('⚠ Nicht gespeichert: '+error.message); return false; }
+  setSync(true); cacheLocal(); return true;
+}
 
 /* ---- Regel: automatische UA-Nummer JJ-XXX ---- */
 function nextUANr(){
@@ -301,39 +370,59 @@ function daysUntil(zieldatum){
 // Frist-Ampel (Spalte "Tage bis Frist"): abgeschlossen -> grün; sonst <=5 Tage -> rot, 6–10 Tage -> gelb
 
 /* ---- Lernende Listen (Dubletten-frei, Groß/Klein wird ignoriert) ---- */
+// Gibt den neu gelernten Eintrag zurück (oder null, wenn schon bekannt)
 function learnValue(listName, value){
   value = (value||'').trim();
-  if(!value) return;
+  if(!value) return null;
   const list = db.lists[listName];
   if(!list.some(v => v.toLowerCase() === value.toLowerCase())){
     list.push(value);
     list.sort((a,b)=>a.localeCompare(b,'de'));
+    return {name:listName, wert:value};
   }
+  return null;
 }
 function learnFromUA(u){
-  learnValue('auftraggeber', u.auftraggeber);
-  learnValue('verantwortlicher', u.verantwortlicher);
-  learnValue('kunde', u.kunde);
-  learnValue('untersuchung', u.untersuchung1);
-  learnValue('untersuchung', u.untersuchung2);
-  learnValue('material', u.material);
+  return [
+    learnValue('auftraggeber', u.auftraggeber),
+    learnValue('verantwortlicher', u.verantwortlicher),
+    learnValue('kunde', u.kunde),
+    learnValue('untersuchung', u.untersuchung1),
+    learnValue('untersuchung', u.untersuchung2),
+    learnValue('material', u.material)
+  ].filter(Boolean);
+}
+async function pushLearned(entries){
+  if(!entries.length) return;
+  await remoteWrite(sb.from('ua_listen').upsert(entries, {onConflict:'name,wert', ignoreDuplicates:true}));
 }
 
 /* ---- Anlegen / Ändern ---- */
-function createUA(fields, kommentar){
-  const ua = Object.assign({
+async function createUA(fields, kommentar){
+  const base = Object.assign({
     id: Date.now() + '-' + Math.random().toString(36).slice(2,7),
-    nr: nextUANr(),
     auftraggeber:'', verantwortlicher:'', kunde:'',
     untersuchung1:'', untersuchung2:'', material:'', dichte:'',
     eingangsdatum:'', zieldatum:'', status:0, kommentare:[],
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
   }, fields);
-  if(kommentar && kommentar.trim()) ua.kommentare.push({ts:new Date().toISOString(), text:kommentar.trim()});
-  db.uas.push(ua);
-  learnFromUA(ua);
-  persist();
-  return ua;
+  if(kommentar && kommentar.trim()) base.kommentare.push({ts:new Date().toISOString(), text:kommentar.trim()});
+  for(let versuch=0; versuch<3; versuch++){
+    const ua = Object.assign({}, base, {nr: nextUANr()});
+    const {error} = await sb.from('ua_auftraege').insert(uaToRow(ua));
+    if(!error){
+      db.uas.push(ua);
+      setSync(true); cacheLocal();
+      await pushLearned(learnFromUA(ua));
+      return ua;
+    }
+    // Nummer wurde parallel von jemand anderem vergeben -> neu laden und erneut versuchen
+    if(error.code === '23505'){ await loadRemote(); continue; }
+    setSync(false); toast('⚠ Nicht gespeichert: '+error.message);
+    return null;
+  }
+  toast('⚠ Konnte keine freie UA-Nummer vergeben – bitte erneut versuchen');
+  return null;
 }
 
 /* ---- Statistiken ---- */
@@ -408,11 +497,11 @@ function resetForm(){
   $('f-zieldatum').value = '';
   $('f-status').value = 0;
 }
-function saveNewUA(){
+async function saveNewUA(){
   if(!$('f-auftraggeber').value.trim() && !$('f-kunde').value.trim()){
     toast('⚠ Bitte mindestens Auftraggeber oder Kunde angeben'); return;
   }
-  const ua = createUA({
+  const ua = await createUA({
     auftraggeber: $('f-auftraggeber').value.trim(),
     verantwortlicher: $('f-verantwortlicher').value.trim(),
     kunde: $('f-kunde').value.trim(),
@@ -424,6 +513,7 @@ function saveNewUA(){
     zieldatum: $('f-zieldatum').value,
     status: parseInt($('f-status').value,10)
   }, $('f-kommentar').value);
+  if(!ua) return;
   toast(`✔ ${ua.nr} gespeichert`);
   resetForm();
   refreshAll();
@@ -488,10 +578,13 @@ function renderTable(){
       <td><button class="btn small secondary">✏ Öffnen</button></td>`;
     tr.querySelector('.ua-nr').onclick = ()=>openEdit(u.id);
     tr.querySelector('button').onclick = ()=>openEdit(u.id);
-    tr.querySelector('.status-select').onchange = e=>{
+    tr.querySelector('.status-select').onchange = async e=>{
+      const vorher = u.status;
       u.status = parseInt(e.target.value,10);
       u.updatedAt = new Date().toISOString();
-      persist(); renderTable(); renderDashboard();
+      renderTable(); renderDashboard();
+      const ok = await remoteWrite(sb.from('ua_auftraege').update({status:u.status, updated_at:u.updatedAt}).eq('id', u.id));
+      if(!ok){ u.status = vorher; renderTable(); renderDashboard(); return; }
       toast(`✔ ${u.nr}: ${STATUS[u.status].label}`);
     };
     tb.appendChild(tr);
@@ -537,32 +630,38 @@ function renderComments(u){
     ? u.kommentare.map(k=>`<div class="comment"><div class="ts">🕒 ${fmtTs(k.ts)}</div>${esc(k.text)}</div>`).join('')
     : '<p class="muted">Noch keine Kommentare.</p>';
 }
-function addComment(){
+async function addComment(){
   const u = db.uas.find(x=>x.id===editId); if(!u) return;
   const txt = $('e-newcomment').value.trim();
   if(!txt) return;
   u.kommentare = u.kommentare||[];
   u.kommentare.push({ts:new Date().toISOString(), text:txt});
   u.updatedAt = new Date().toISOString();
+  const ok = await remoteWrite(sb.from('ua_auftraege').update({kommentare:u.kommentare, updated_at:u.updatedAt}).eq('id', u.id));
+  if(!ok){ u.kommentare.pop(); return; }
   $('e-newcomment').value='';
-  persist(); renderComments(u); renderTable();
+  renderComments(u); renderTable();
   toast('💬 Kommentar hinzugefügt');
 }
-function saveEdit(){
+async function saveEdit(){
   const u = db.uas.find(x=>x.id===editId); if(!u) return;
-  for(const f of ['auftraggeber','verantwortlicher','kunde','untersuchung1','untersuchung2','material','dichte','eingangsdatum','zieldatum']) u[f] = $('e-'+f).value.trim ? $('e-'+f).value.trim() : $('e-'+f).value;
+  for(const f of ['auftraggeber','verantwortlicher','kunde','untersuchung1','untersuchung2','material','dichte']) u[f] = $('e-'+f).value.trim();
   u.eingangsdatum = $('e-eingangsdatum').value; u.zieldatum = $('e-zieldatum').value;
   u.status = parseInt($('e-status').value,10);
   u.updatedAt = new Date().toISOString();
-  learnFromUA(u);
-  persist(); closeEdit(); refreshAll();
+  const ok = await remoteWrite(sb.from('ua_auftraege').update(uaToRow(u)).eq('id', u.id));
+  if(!ok) return;
+  await pushLearned(learnFromUA(u));
+  closeEdit(); refreshAll();
   toast(`✔ ${u.nr} aktualisiert`);
 }
-function deleteUA(){
+async function deleteUA(){
   const u = db.uas.find(x=>x.id===editId); if(!u) return;
   if(!confirm(`UA ${u.nr} wirklich löschen?`)) return;
-  db.uas = db.uas.filter(x=>x.id!==editId);
-  persist(); closeEdit(); refreshAll();
+  const ok = await remoteWrite(sb.from('ua_auftraege').delete().eq('id', u.id));
+  if(!ok) return;
+  db.uas = db.uas.filter(x=>x.id!==u.id);
+  cacheLocal(); closeEdit(); refreshAll();
   toast(`🗑 ${u.nr} gelöscht`);
 }
 function closeEdit(){ $('editDlg').close(); editId = null; }
@@ -606,9 +705,11 @@ function renderListManager(){
     ${db.lists[key].map(v=>`<span class="chip">${esc(v)} <button title="entfernen" onclick="removeListValue('${key}','${esc(v).replace(/'/g,"\\'")}')">✕</button></span>`).join('') || '<span class="muted">– leer –</span>'}
     </div>`).join('');
 }
-function removeListValue(key, val){
+async function removeListValue(key, val){
+  const ok = await remoteWrite(sb.from('ua_listen').delete().eq('name', key).eq('wert', val));
+  if(!ok) return;
   db.lists[key] = db.lists[key].filter(v=>v!==val);
-  persist(); refreshAll();
+  cacheLocal(); refreshAll();
 }
 
 /* ---- Export / Import ---- */
@@ -636,14 +737,18 @@ function exportCSV(){
 $('impJson').onchange = e=>{
   const f = e.target.files[0]; if(!f) return;
   const r = new FileReader();
-  r.onload = ()=>{
+  r.onload = async ()=>{
     try{
       const d = JSON.parse(r.result);
       if(!d || !Array.isArray(d.uas)) throw new Error('Ungültiges Format');
-      db = Object.assign(emptyDB(), d);
-      db.lists = Object.assign(emptyDB().lists, d.lists||{});
-      persist(); refreshAll();
-      toast(`⬆ Backup importiert (${db.uas.length} UAs)`);
+      if(!confirm(`${d.uas.length} UAs aus dem Backup in die zentrale Datenbank übernehmen? Bestehende UAs mit gleicher Kennung werden überschrieben.`)) return;
+      for(let i=0; i<d.uas.length; i+=200)
+        await remoteWrite(sb.from('ua_auftraege').upsert(d.uas.slice(i,i+200).map(uaToRow), {onConflict:'id'}));
+      const eintraege = [];
+      for(const [name, werte] of Object.entries(d.lists||{})) for(const w of (werte||[])) eintraege.push({name, wert:w});
+      if(eintraege.length) await remoteWrite(sb.from('ua_listen').upsert(eintraege, {onConflict:'name,wert', ignoreDuplicates:true}));
+      await loadRemote(); refreshAll();
+      toast(`⬆ Backup übernommen (${d.uas.length} UAs)`);
     }catch(err){ toast('⚠ Import fehlgeschlagen: '+err.message); }
   };
   r.readAsText(f); e.target.value='';
@@ -695,11 +800,12 @@ function normStatus(v){
   if(low.includes('vorbereit') || low.includes('probe')) return 1;
   return 0;
 }
-function importRows(rows){
+async function importRows(rows){
   // rows: Array von Arrays, erste Zeile = Header
   if(!rows.length){ toast('⚠ Keine Daten gefunden'); return; }
   const cols = rows[0].map(mapHeader);
   let added = 0, skipped = 0;
+  const neueUAs = [], gelernt = [];
   const existing = new Set(db.uas.map(u=>u.nr));
   for(let i=1;i<rows.length;i++){
     const row = rows[i];
@@ -725,9 +831,14 @@ function importRows(rows){
     if(!u.nr) u.nr = nextUANr();
     if(existing.has(u.nr)){ skipped++; continue; } // Dubletten bereinigen
     existing.add(u.nr);
-    db.uas.push(u); learnFromUA(u); added++;
+    db.uas.push(u); neueUAs.push(u); gelernt.push(...learnFromUA(u)); added++;
   }
-  persist(); refreshAll();
+  let ok = true;
+  for(let i=0; i<neueUAs.length; i+=200)
+    ok = (await remoteWrite(sb.from('ua_auftraege').insert(neueUAs.slice(i,i+200).map(uaToRow)))) && ok;
+  if(gelernt.length) await remoteWrite(sb.from('ua_listen').upsert(gelernt, {onConflict:'name,wert', ignoreDuplicates:true}));
+  if(!ok) await loadRemote(); // bei Fehlern Stand der Datenbank übernehmen
+  refreshAll();
   toast(`📥 Import: ${added} übernommen, ${skipped} Dubletten übersprungen`);
 }
 function parseCSV(text){
@@ -771,9 +882,12 @@ $('impXlsx').onchange = async e=>{
   e.target.value='';
 };
 
-function wipeAll(){
-  if(!confirm('Wirklich ALLE UAs und gelernten Listen löschen? (Tipp: vorher Backup exportieren)')) return;
-  db = emptyDB(); persist(); refreshAll();
+async function wipeAll(){
+  if(!confirm('Wirklich ALLE UAs und gelernten Listen aus der zentralen Datenbank löschen? Das betrifft alle Nutzer! (Tipp: vorher Backup exportieren)')) return;
+  const ok1 = await remoteWrite(sb.from('ua_auftraege').delete().neq('id',''));
+  const ok2 = await remoteWrite(sb.from('ua_listen').delete().neq('name',''));
+  if(!(ok1 && ok2)) return;
+  db = emptyDB(); cacheLocal(); refreshAll();
   toast('🗑 Alle Daten gelöscht');
 }
 
@@ -787,8 +901,91 @@ function refreshAll(){
   renderListManager();
 }
 
+/* ---- Anmeldung & App-Start ---- */
+function setSync(ok){ const d = $('syncDot'); if(d) d.classList.toggle('off', !ok); }
+function loginMsg(text, ok){ const m = $('l-msg'); m.textContent = text||''; m.classList.toggle('ok', !!ok); }
+
+async function doLogin(){
+  loginMsg('Anmeldung läuft…', true);
+  const {error} = await sb.auth.signInWithPassword({email:$('l-email').value.trim(), password:$('l-pass').value});
+  if(error){
+    loginMsg('⚠ ' + (/invalid login credentials/i.test(error.message) ? 'E-Mail oder Passwort falsch' :
+      /email not confirmed/i.test(error.message) ? 'E-Mail noch nicht bestätigt – bitte Link in der Bestätigungs-E-Mail anklicken' : error.message));
+    return;
+  }
+  await enterApp();
+}
+async function doRegister(){
+  const email = $('l-email').value.trim(), pass = $('l-pass').value;
+  if(!email || pass.length < 6){ loginMsg('⚠ Bitte E-Mail und ein Passwort mit mind. 6 Zeichen eingeben'); return; }
+  loginMsg('Registrierung läuft…', true);
+  const {error} = await sb.auth.signUp({email, password:pass, options:{emailRedirectTo: location.origin + location.pathname}});
+  if(error){ loginMsg('⚠ ' + error.message); return; }
+  loginMsg('✔ Registriert! Bitte den Bestätigungslink in deiner E-Mail anklicken und dich danach hier anmelden.', true);
+}
+async function doLogout(){
+  await sb.auth.signOut();
+  db = emptyDB(); refreshAll();
+  $('userBox').style.display = 'none';
+  loginMsg('');
+  $('loginOverlay').classList.remove('hidden');
+}
+
+let realtimeAktiv = false;
+async function enterApp(){
+  const {data:{user}} = await sb.auth.getUser();
+  if(!user) return;
+  // Freischaltung prüfen: ohne Whitelist-Eintrag liefert die Abfrage keine Zeilen
+  const {data: erlaubt, error} = await sb.from('ua_erlaubte_nutzer').select('email').limit(1);
+  if(error || !erlaubt || !erlaubt.length){
+    await sb.auth.signOut();
+    loginMsg(`⚠ ${user.email} ist noch nicht freigeschaltet. Bitte beim Administrator melden.`);
+    return;
+  }
+  $('loginOverlay').classList.add('hidden');
+  $('userEmail').textContent = user.email;
+  $('userBox').style.display = 'flex';
+  await loadRemote();
+  await migrateLegacy();
+  resetForm(); refreshAll();
+  if(!realtimeAktiv){
+    realtimeAktiv = true;
+    sb.channel('ua-sync')
+      .on('postgres_changes', {event:'*', schema:'public', table:'ua_auftraege'}, async ()=>{ await loadRemote(); refreshAll(); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'ua_listen'},   async ()=>{ await loadRemote(); refreshAll(); })
+      .subscribe();
+  }
+}
+
+// Einmalige Übernahme des alten localStorage-Bestands in die zentrale Datenbank
+async function migrateLegacy(){
+  try{
+    const raw = localStorage.getItem(LEGACY_KEY);
+    if(!raw) return;
+    const alt = JSON.parse(raw);
+    if(!alt || !Array.isArray(alt.uas) || !alt.uas.length){ localStorage.removeItem(LEGACY_KEY); return; }
+    if(db.uas.length){ return; } // zentrale DB hat schon Daten -> nichts automatisch mischen
+    if(!confirm(`Auf diesem Gerät liegen ${alt.uas.length} UAs aus der bisherigen lokalen Speicherung. Jetzt in die zentrale Datenbank übernehmen?`)) return;
+    for(let i=0; i<alt.uas.length; i+=200)
+      await remoteWrite(sb.from('ua_auftraege').upsert(alt.uas.slice(i,i+200).map(uaToRow), {onConflict:'id'}));
+    const eintraege = [];
+    for(const [name, werte] of Object.entries(alt.lists||{})) for(const w of (werte||[])) eintraege.push({name, wert:w});
+    if(eintraege.length) await remoteWrite(sb.from('ua_listen').upsert(eintraege, {onConflict:'name,wert', ignoreDuplicates:true}));
+    localStorage.setItem(LEGACY_KEY + '-migriert', raw); // Sicherungskopie behalten
+    localStorage.removeItem(LEGACY_KEY);
+    await loadRemote();
+    toast(`✔ ${alt.uas.length} UAs in die zentrale Datenbank übernommen`);
+  }catch(e){ console.error('Migration fehlgeschlagen', e); }
+}
+
+$('l-pass').addEventListener('keydown', e=>{ if(e.key === 'Enter') doLogin(); });
+
 resetForm();
 refreshAll();
+(async ()=>{
+  const {data:{session}} = await sb.auth.getSession();
+  if(session) await enterApp();
+})();
 </script>
 </body>
 </html>
