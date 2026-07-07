@@ -45,6 +45,12 @@
   .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
   .st0{background:var(--st0);color:#fff}.st1{background:var(--st1);color:#5c4a00}
   .st2{background:var(--st2);color:#fff}.st3{background:var(--st3);color:#fff}.st4{background:var(--st4);color:#fff}
+  .status-select{appearance:none;-webkit-appearance:none;width:auto;border:none;border-radius:999px;
+    padding:4px 24px 4px 10px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='white' fill='none' stroke-width='2'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 8px center;background-size:10px}
+  .status-select.st1{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235c4a00' fill='none' stroke-width='2'/%3E%3C/svg%3E")}
+  .status-select option{background:#fff;color:var(--text);font-weight:400}
   tr.due-red td:first-child{box-shadow:inset 4px 0 0 var(--red)}
   tr.due-yellow td:first-child{box-shadow:inset 4px 0 0 var(--yellow)}
   tr.done td:first-child{box-shadow:inset 4px 0 0 var(--green)}
@@ -481,11 +487,19 @@ function renderTable(){
       <td>${esc(u.material)}</td><td>${esc(u.dichte)}</td>
       <td>${fmtDate(u.eingangsdatum)}</td><td>${fmtDate(u.zieldatum)}</td>
       <td class="days ${dCls}">${u.status===4 ? '✔' : (d===null ? '–' : d)}</td>
-      <td><span class="badge ${STATUS[u.status]?.cls||'st0'}">${esc(STATUS[u.status]?.label||u.status)}</span></td>
+      <td><select class="status-select ${STATUS[u.status]?.cls||'st0'}" title="Status direkt ändern">${
+        STATUS.map(s=>`<option value="${s.id}" ${s.id===u.status?'selected':''}>${esc(s.label)}</option>`).join('')
+      }</select></td>
       <td class="muted" style="max-width:220px">${esc(lastC.length>60 ? lastC.slice(0,60)+'…' : lastC)}</td>
       <td><button class="btn small secondary">✏ Öffnen</button></td>`;
     tr.querySelector('.ua-nr').onclick = ()=>openEdit(u.id);
     tr.querySelector('button').onclick = ()=>openEdit(u.id);
+    tr.querySelector('.status-select').onchange = e=>{
+      u.status = parseInt(e.target.value,10);
+      u.updatedAt = new Date().toISOString();
+      persist(); renderTable(); renderDashboard();
+      toast(`✔ ${u.nr}: ${STATUS[u.status].label}`);
+    };
     tb.appendChild(tr);
   }
   // Sortier-Pfeile
