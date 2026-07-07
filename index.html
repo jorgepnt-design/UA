@@ -6,19 +6,19 @@
 <title>UA-Verwaltung – Untersuchungsanforderungen</title>
 <style>
   :root{
-    --bg:#f4f6f9; --card:#ffffff; --border:#dde3ea; --text:#1f2933; --muted:#6b7684;
-    --accent:#2563eb; --accent-dark:#1e40af;
+    --bg:#f0eee9; --card:#ffffff; --border:#ddd8ce; --text:#282828; --muted:#6b7280;
+    --accent:#991d85; --accent-dark:#7a176a; --accent-deepest:#5c1150; --sand:#e9e6df;
     --st0:#9ca3af; --st1:#facc15; --st2:#3b82f6; --st3:#f97316; --st4:#22c55e;
     --red:#ef4444; --yellow:#facc15; --green:#22c55e;
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
-  header{background:#0f2a4a;color:#fff;padding:14px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  header{background:#991d85;color:#fff;padding:14px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
   header h1{font-size:18px;margin:0;font-weight:600}
   header .sub{opacity:.7;font-size:12px}
   nav{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
   nav button{background:rgba(255,255,255,.12);border:none;color:#fff;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px}
-  nav button.active{background:#fff;color:#0f2a4a;font-weight:600}
+  nav button.active{background:#fff;color:#991d85;font-weight:600}
   main{max-width:1400px;margin:0 auto;padding:20px}
   .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:18px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
   .card h2{margin:0 0 14px;font-size:16px}
@@ -29,8 +29,8 @@
   textarea{resize:vertical;min-height:70px}
   .btn{background:var(--accent);color:#fff;border:none;padding:9px 18px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600}
   .btn:hover{background:var(--accent-dark)}
-  .btn.secondary{background:#e5e9ef;color:var(--text)}
-  .btn.secondary:hover{background:#d5dbe4}
+  .btn.secondary{background:#e9e6df;color:var(--text)}
+  .btn.secondary:hover{background:#ddd8ce}
   .btn.danger{background:var(--red)}
   .btn.small{padding:4px 10px;font-size:12px}
   .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:12px}
@@ -38,9 +38,9 @@
   .toolbar .search{flex:1;min-width:200px}
   table{width:100%;border-collapse:collapse;font-size:13px}
   th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
-  th{background:#f0f3f7;cursor:pointer;user-select:none;white-space:nowrap;position:sticky;top:0}
+  th{background:#e9e6df;cursor:pointer;user-select:none;white-space:nowrap;position:sticky;top:0}
   th .arrow{font-size:10px;color:var(--accent)}
-  tbody tr:hover{background:#f6f9fd}
+  tbody tr:hover{background:#f7f4ef}
   .table-wrap{overflow-x:auto;max-height:65vh;overflow-y:auto;border:1px solid var(--border);border-radius:8px}
   .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
   .st0{background:var(--st0);color:#fff}.st1{background:var(--st1);color:#5c4a00}
@@ -71,16 +71,16 @@
   .legend div{display:flex;align-items:center;gap:8px;font-size:12px;margin:4px 0}
   .legend .sw{width:14px;height:14px;border-radius:3px;display:inline-block}
   dialog{border:none;border-radius:12px;padding:0;max-width:920px;width:95%;box-shadow:0 10px 40px rgba(0,0,0,.25)}
-  dialog::backdrop{background:rgba(15,42,74,.45)}
-  .dlg-head{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;background:#0f2a4a;color:#fff;border-radius:12px 12px 0 0}
+  dialog::backdrop{background:rgba(92,17,80,.45)}
+  .dlg-head{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;background:#991d85;color:#fff;border-radius:12px 12px 0 0}
   .dlg-head h3{margin:0;font-size:16px}
   .dlg-body{padding:20px;max-height:75vh;overflow-y:auto}
-  .comment{background:#f0f3f7;border-radius:8px;padding:8px 12px;margin:6px 0;font-size:13px}
+  .comment{background:#f0eee9;border-radius:8px;padding:8px 12px;margin:6px 0;font-size:13px}
   .comment .ts{font-size:11px;color:var(--muted);font-weight:600}
   .muted{color:var(--muted);font-size:12px}
-  .chip{display:inline-flex;align-items:center;gap:6px;background:#eef2f7;border:1px solid var(--border);border-radius:999px;padding:3px 10px;margin:3px;font-size:12px}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:#f0eee9;border:1px solid var(--border);border-radius:999px;padding:3px 10px;margin:3px;font-size:12px}
   .chip button{border:none;background:none;color:var(--red);cursor:pointer;font-weight:700;padding:0}
-  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0f2a4a;color:#fff;padding:10px 22px;border-radius:8px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:99}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#5c1150;color:#fff;padding:10px 22px;border-radius:8px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:99}
   .toast.show{opacity:1}
   .hidden{display:none!important}
   .flex-end{display:flex;gap:10px;justify-content:flex-end;margin-top:14px}
@@ -108,7 +108,7 @@
   <div class="card">
     <h2>Neue Untersuchungsanforderung anlegen</h2>
     <div class="grid">
-      <div><label>UA-Nummer (automatisch)</label><input id="f-nr" readonly style="background:#f0f3f7;font-weight:700"></div>
+      <div><label>UA-Nummer (automatisch)</label><input id="f-nr" readonly style="background:#f0eee9;font-weight:700"></div>
       <div><label>Auftraggeber</label><input id="f-auftraggeber" list="dl-auftraggeber" placeholder="wählen oder neu eingeben"></div>
       <div><label>Verantwortlicher</label><input id="f-verantwortlicher" list="dl-verantwortlicher" placeholder="wählen oder neu eingeben"></div>
       <div><label>Kunde</label><input id="f-kunde" list="dl-kunde" placeholder="wählen oder neu eingeben"></div>
@@ -218,7 +218,7 @@
   <div class="dlg-head"><h3 id="dlgTitle">UA bearbeiten</h3><button class="btn small secondary" onclick="closeEdit()">✕ Schließen</button></div>
   <div class="dlg-body">
     <div class="grid">
-      <div><label>UA-Nummer</label><input id="e-nr" readonly style="background:#f0f3f7;font-weight:700"></div>
+      <div><label>UA-Nummer</label><input id="e-nr" readonly style="background:#f0eee9;font-weight:700"></div>
       <div><label>Auftraggeber</label><input id="e-auftraggeber" list="dl-auftraggeber"></div>
       <div><label>Verantwortlicher</label><input id="e-verantwortlicher" list="dl-verantwortlicher"></div>
       <div><label>Kunde</label><input id="e-kunde" list="dl-kunde"></div>
@@ -600,9 +600,9 @@ function renderDashboard(){
   $('statusPie').style.background = segs.length ? `conic-gradient(${segs.join(',')})` : '#e5e9ef';
   $('statusLegend').innerHTML = s.perStatus.map(([st,c])=>
     `<div><span class="sw" style="background:${st.color}"></span>${esc(st.label)}: <b>${c}</b></div>`).join('');
-  barChart($('chartUntersuchung'), s.perUnt, '#2563eb');
-  barChart($('chartVerantwortlicher'), s.perVer, '#f97316');
-  barChart($('chartKunde'), s.perKunde, '#0d9488');
+  barChart($('chartUntersuchung'), s.perUnt, '#991d85');
+  barChart($('chartVerantwortlicher'), s.perVer, '#dc6b2f');
+  barChart($('chartKunde'), s.perKunde, '#789d4a');
 }
 
 /* ---- Listenverwaltung ---- */
