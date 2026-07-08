@@ -875,6 +875,29 @@ function parseCSV(text){
   if(cur!=='' || row.length){ row.push(cur); if(row.some(x=>x!=='')) rows.push(row); }
   return rows;
 }
+async function autoImportSeedCSV(){
+  try{
+    const res = await fetch('ua-screenshot-import.csv', {cache:'no-store'});
+    if(!res.ok) return;
+    const rows = parseCSV(await res.text());
+    if(rows.length < 2) return;
+    const cols = rows[0].map(mapHeader);
+    const nrIdx = cols.indexOf('nr');
+    if(nrIdx < 0) return;
+    const existing = new Set(db.uas.map(u => String(u.nr||'').trim()));
+    const missing = [rows[0]];
+    for(const row of rows.slice(1)){
+      const nr = String(row[nrIdx]||'').trim();
+      if(nr && !existing.has(nr)){
+        existing.add(nr);
+        missing.push(row);
+      }
+    }
+    if(missing.length > 1) await importRows(missing);
+  }catch(e){
+    console.warn('Auto-import CSV skipped', e);
+  }
+}
 $('impXlsx').onchange = async e=>{
   const f = e.target.files[0]; if(!f) return;
   try{
@@ -1028,6 +1051,7 @@ async function enterApp(){
   $('userEmail').textContent = user.email;
   $('userBox').style.display = 'flex';
   await loadRemote();
+  await autoImportSeedCSV();
   await loadAccess();
   await migrateLegacy();
   resetForm(); refreshAll();
