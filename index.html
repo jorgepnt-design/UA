@@ -20,6 +20,7 @@
   nav button{background:rgba(255,255,255,.12);border:none;color:#fff;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px}
   nav button.active{background:#fff;color:#991d85;font-weight:600}
   main{max-width:1400px;margin:0 auto;padding:20px}
+  body:has(#tab-list:not(.hidden)) main{max-width:none;padding-left:20px;padding-right:20px}
   .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:18px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
   .card h2{margin:0 0 14px;font-size:16px}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
@@ -37,6 +38,8 @@
   .toolbar>div{min-width:140px}
   .toolbar .search{flex:1;min-width:200px}
   table{width:100%;border-collapse:collapse;font-size:13px}
+  #uaTable{min-width:1900px}
+  #uaTable th.comment-col,#uaTable td.comment-col{min-width:520px;width:34%;white-space:normal;line-height:1.35}
   th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
   th{background:#e9e6df;cursor:pointer;user-select:none;white-space:nowrap;position:sticky;top:0}
   th .arrow{font-size:10px;color:var(--accent)}
@@ -197,7 +200,7 @@
           <th data-k="zieldatum">Ziel <span class="arrow"></span></th>
           <th data-k="_tage">Tage bis Frist <span class="arrow"></span></th>
           <th data-k="status">Status <span class="arrow"></span></th>
-          <th>Letzter Kommentar</th>
+          <th class="comment-col">Letzter Kommentar</th>
           <th></th>
         </tr></thead>
         <tbody id="uaBody"></tbody>
@@ -593,7 +596,7 @@ function renderTable(){
       <td><select class="status-select ${STATUS[u.status]?.cls||'st0'}" title="Status direkt ändern">${
         STATUS.map(s=>`<option value="${s.id}" ${s.id===u.status?'selected':''}>${esc(s.label)}</option>`).join('')
       }</select></td>
-      <td class="muted" style="max-width:220px">${esc(lastC.length>60 ? lastC.slice(0,60)+'…' : lastC)}</td>
+      <td class="muted comment-col">${esc(lastC.length>220 ? lastC.slice(0,220)+'…' : lastC)}</td>
       <td><button class="btn small secondary">✏ Öffnen</button></td>`;
     tr.querySelector('.ua-nr').onclick = ()=>openEdit(u.id);
     tr.querySelector('button').onclick = ()=>openEdit(u.id);
